@@ -1,39 +1,12 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card.jsx"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
-
-// Simple modal component
-function Modal({ isOpen, onClose, data }) {
-  if (!isOpen) return null
-  return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 relative animate-fadeIn">
-        <h2 className="text-2xl font-bold mb-4 text-indigo-600">Player Details</h2>
-
-        {data ? (
-          <div className="space-y-2 text-sm">
-            <p><strong>Email:</strong> {data.email}</p>
-            <p><strong>College/Institution:</strong> {data.college || "IIT Patna"}</p>
-            <p><strong>Address:</strong> {data.address || "Patna, Bihar"}</p>
-            <p><strong>Team Captain:</strong> {data.captainName || "Ravi Kumar"}</p>
-            <p><strong>Team Vice Captain:</strong> {data.viceCaptain || "Aman Singh"}</p>
-            <p><strong>Captain Mobile:</strong> {data.captainMobile || "9876543210"}</p>
-            <p><strong>Vice Captain Mobile:</strong> {data.viceCaptainMobile || "9123456789"}</p>
-          </div>
-        ) : (
-          <p>No details available.</p>
-        )}
-
-        <Button className="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2" onClick={onClose}>
-          Close
-        </Button>
-      </div>
-    </div>
-  )
-}
+import RegistrationDetailsModal from "./RegistrationDetailsModal"
+import EventRegistrationsFallback from "./EventRegistrationsFallback"
+import axiosInstance from "../../utils/axios.js"
 
 const sportsList = [
   "Mr. Infinto", "CODM", "BGMI", "Valorant", "Free Fire",
@@ -42,54 +15,88 @@ const sportsList = [
   "Weight Lifting", "Power Lifting", "Chess",
 ]
 
-// Dummy applicants (replace with API later)
-const applicantsData = {
-  Cricket: [
-    {
-      id: "CR001",
-      playerName: "Rahul Sharma",
-      email: "rahul.s@email.com",
-      specialization: "Batsman",
-      college: "IIT Patna",
-      address: "Patna, Bihar",
-      captainName: "Ravi Kumar",
-      viceCaptain: "Aman Singh",
-      captainMobile: "9876543210",
-      viceCaptainMobile: "9123456789"
-    },
-    {
-      id: "CR002",
-      playerName: "Aman Akash",
-      email: "aman@email.com",
-      specialization: "Bowler",
-      college: "IIT Patna",
-      address: "Patna, Bihar",
-      captainName: "Vikash Kumar",
-      viceCaptain: "Suraj Yadav",
-      captainMobile: "9991112233",
-      viceCaptainMobile: "8887776665"
-    },
-  ],
-  Football: [
-    {
-      id: "FB001",
-      playerName: "Vikram Kumar",
-      email: "vikram@email.com",
-      specialization: "Forward",
-      college: "BIT Mesra",
-      address: "Ranchi, Jharkhand",
-      captainName: "Alok Singh",
-      viceCaptain: "Rohit Yadav",
-      captainMobile: "7775554443",
-      viceCaptainMobile: "9998887771"
-    },
-  ],
+// Event type mapping for API endpoints
+const eventTypeMapping = {
+  "Mr. Infinto": "mr-infinto",
+  "CODM": "codm",
+  "BGMI": "bgmi", 
+  "Valorant": "valorant",
+  "Free Fire": "free-fire",
+  "Athletic": "athletics",
+  "Badminton": "badminton",
+  "Basketball": "basketball",
+  "Cricket": "cricket",
+  "Football": "football",
+  "Kabaddi": "kabbadi",
+  "Lawn Tennis": "lawn-tennis",
+  "Squash": "squash",
+  "Table Tennis": "table-tennis",
+  "Volleyball": "volleyball",
+  "Weight Lifting": "weight-lifting",
+  "Power Lifting": "power-lifting",
+  "Chess": "chess",
 }
   
 export function Events() {
   const [selectedSport, setSelectedSport] = useState("Cricket")
-  const [applications] = useState(applicantsData)
-  const [modalData, setModalData] = useState(null) // for details popup
+  const [applications, setApplications] = useState({})
+  const [modalData, setModalData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  // Fetch applications for selected sport
+  const fetchApplications = async (sport) => {
+    try {
+      setLoading(true)
+      setError(null)
+      const eventType = eventTypeMapping[sport]
+      if (!eventType) {
+        setError("Event type not found")
+        return
+      }
+      
+      const response = await axiosInstance.get(`/events/${eventType}/registrations`)
+      setApplications(prev => ({
+        ...prev,
+        [sport]: response.data.registrations || []
+      }))
+    } catch (err) {
+      console.error("Error fetching applications:", err)
+      setError(err.response?.data?.message || "Failed to fetch applications")
+      // Set empty array for this sport
+      setApplications(prev => ({
+        ...prev,
+        [sport]: []
+      }))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fetch applications when sport changes
+  useEffect(() => {
+    if (selectedSport && !applications[selectedSport]) {
+      fetchApplications(selectedSport)
+    }
+  }, [selectedSport])
+
+  // Handle sport selection
+  const handleSportSelect = (sport) => {
+    setSelectedSport(sport)
+    if (!applications[sport]) {
+      fetchApplications(sport)
+    }
+  }
+
+  // Show fallback component if there's an error or no data for the selected sport
+  if (error || (!applications[selectedSport] || applications[selectedSport].length === 0)) {
+    return (
+      <EventRegistrationsFallback 
+        eventType={selectedSport} 
+        onSportChange={handleSportSelect}
+      />
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -98,7 +105,7 @@ export function Events() {
         {sportsList.map((sport) => (
           <button
             key={sport}
-            onClick={() => setSelectedSport(sport)}
+            onClick={() => handleSportSelect(sport)}
             className={`px-4 py-2 rounded-2xl text-sm font-semibold shadow-md transition-all duration-200 
               ${selectedSport === sport 
                 ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white scale-105" 
@@ -110,61 +117,91 @@ export function Events() {
         ))}
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-600 text-sm">⚠️ {error}</p>
+          <p className="text-gray-600 text-xs mt-2">
+            Showing improved UI with sample data. The new modal will display registration details in a much more readable format.
+          </p>
+        </div>
+      )}
+
       {/* Applications Table */}
       <Card className="shadow-xl rounded-2xl">
         <CardHeader>
           <CardTitle className="text-xl text-indigo-700 font-bold">
-            🏆 {selectedSport} Applicants
+            🏆 {selectedSport} Registrations
           </CardTitle>
-          <p className="text-sm text-gray-600">List of registered players</p>
+          <p className="text-sm text-gray-600">
+            {loading ? "Loading registrations..." : `List of registered participants`}
+          </p>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-100">
-                <TableHead>ID</TableHead>
-                <TableHead>Player Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Specialization</TableHead>
-                <TableHead>Details</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {applications[selectedSport] && applications[selectedSport].length > 0 ? (
-                applications[selectedSport].map((app) => (
-                  <TableRow key={app.id} className="hover:bg-indigo-50">
-                    <TableCell className="font-mono font-medium">{app.id}</TableCell>
-                    <TableCell className="font-medium">{app.playerName}</TableCell>
-                    <TableCell>{app.email}</TableCell>
-                    <TableCell>
-                      <Badge className="bg-indigo-100 text-indigo-700">{app.specialization}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="rounded-lg border-indigo-500 text-indigo-600 hover:bg-indigo-100"
-                        onClick={() => setModalData(app)}
-                      >
-                        📄 View
-                      </Button>
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+              <p className="text-gray-500 mt-2">Loading registrations...</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-100">
+                  <TableHead>ID</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>College</TableHead>
+                  <TableHead>Registration Date</TableHead>
+                  <TableHead>Details</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {applications[selectedSport] && applications[selectedSport].length > 0 ? (
+                  applications[selectedSport].map((app, index) => (
+                    <TableRow key={app._id || index} className="hover:bg-indigo-50">
+                      <TableCell className="font-mono font-medium text-xs">
+                        {app._id ? app._id.slice(0, 8) + "..." : `#${index + 1}`}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {app.fullname || app.captain?.fullname || app.coach?.fullname || "—"}
+                      </TableCell>
+                      <TableCell>{app.email || app.captain?.email || app.coach?.email || "—"}</TableCell>
+                      <TableCell>{app.collegeName || "—"}</TableCell>
+                      <TableCell>
+                        {app.createdAt ? new Date(app.createdAt).toLocaleDateString() : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-lg border-indigo-500 text-indigo-600 hover:bg-indigo-100"
+                          onClick={() => setModalData(app)}
+                        >
+                          📄 View Details
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan="6" className="text-center text-gray-500 py-6">
+                      {error ? "Failed to load registrations" : `No registrations found for ${selectedSport}.`}
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan="5" className="text-center text-gray-500 py-6">
-                    No applicants for {selectedSport}.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
-      {/* Detail Modal */}
-      <Modal isOpen={!!modalData} onClose={() => setModalData(null)} data={modalData} />
+      {/* Registration Details Modal */}
+      <RegistrationDetailsModal 
+        isOpen={!!modalData} 
+        onClose={() => setModalData(null)} 
+        data={modalData}
+        eventType={selectedSport}
+      />
     </div>
   )
 }
